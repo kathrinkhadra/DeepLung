@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from torch import optim
 from torch.autograd import Variable
 # from config_training import config as config_training
+import matplotlib.pyplot as plt
 
 from layers import acc
 
@@ -24,13 +25,13 @@ parser = argparse.ArgumentParser(description='PyTorch DataBowl3 Detector')
 parser.add_argument('--model', '-m', metavar='MODEL', default='base',
                     help='model')
 parser.add_argument('--config', '-c', default='config_training', type=str)
-parser.add_argument('-j', '--workers', default=30, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=30, type=int, metavar='N',#4
                     help='number of data loading workers (default: 32)')
 parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=16, type=int,
+parser.add_argument('-b', '--batch-size', default=16, type=int,#100
                     metavar='N', help='mini-batch size (default: 16)')
 parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
                     metavar='LR', help='initial learning rate')
@@ -62,6 +63,7 @@ def main():
     config_training = config_training.config
     # from config_training import config as config_training
     torch.manual_seed(0)
+    print(torch.cuda.is_available())
     torch.cuda.set_device(0)
 
     model = import_module(args.model)
@@ -105,9 +107,10 @@ def main():
     valdatadir = config_training['val_preprocess_result_path']
     testdatadir = config_training['test_preprocess_result_path']
     trainfilelist = []
-    print config_training['train_data_path']
+    print(config_training['train_data_path'])
     for folder in config_training['train_data_path']:
-        print folder
+        print(folder)
+        print(os.getcwd())
         for f in os.listdir(folder):
             if f.endswith('.mhd') and f[:-4] not in config_training['black_list']:
                 trainfilelist.append(folder.split('/')[-2]+'/'+f[:-4])
@@ -149,18 +152,31 @@ def main():
         return
     #net = DataParallel(net)
     import data
-    print len(trainfilelist)
+    print(len(trainfilelist))
     dataset = data.DataBowl3Detector(
         traindatadir,
         trainfilelist,
         config,
         phase = 'train')
+    
+    #figure = plt.figure(figsize=(8, 8))
+    #cols, rows = 3, 3
+    #for i in range(1, cols * rows + 1):
+     #   sample_idx = torch.randint(len(dataset), size=(1,)).item()
+     #   img, label = dataset[sample_idx]
+     #   figure.add_subplot(rows, cols, i)
+     #   plt.axis("off")
+     #   plt.imshow(img.squeeze(), cmap="gray")
+    #plt.show()
+    
+    print(dataset)
     train_loader = DataLoader(
         dataset,
         batch_size = args.batch_size,
         shuffle = True,
         num_workers = args.workers,
         pin_memory=True)
+    print(train_loader)
 
     dataset = data.DataBowl3Detector(
         valdatadir,
@@ -177,16 +193,20 @@ def main():
     for i, (data, target, coord) in enumerate(train_loader): # check data consistency
         if i >= len(trainfilelist)/args.batch_size:
             break
-
+    print("first done")
+    
     for i, (data, target, coord) in enumerate(val_loader): # check data consistency
         if i >= len(valfilelist)/args.batch_size:
             break
+    print("second done")
 
     optimizer = torch.optim.SGD(
         net.parameters(),
         args.lr,
         momentum = 0.9,
         weight_decay = args.weight_decay)
+    
+    print("Optimizer done")
     
     def get_lr(epoch):
         if epoch <= args.epochs * 1/3: #0.5:
@@ -201,8 +221,11 @@ def main():
     
 
     for epoch in range(start_epoch, args.epochs + 1):
+        print(epoch)
         train(train_loader, net, loss, epoch, optimizer, get_lr, args.save_freq, save_dir)
+        print("check 1")
         validate(val_loader, net, loss)
+        print("check 2")
 
 def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir):
     start_time = time.time()
@@ -215,17 +238,19 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
     metrics = []
 
     for i, (data, target, coord) in enumerate(data_loader):
-        data = Variable(data.cuda(async = True))
-        target = Variable(target.cuda(async = True))
-        coord = Variable(coord.cuda(async = True))
+        data = Variable(data.cuda(non_blocking = True))
+        target = Variable(target.cuda(non_blocking = True))
+        coord = Variable(coord.cuda(non_blocking = True))
 
         output = net(data, coord)
+        #print(output)
+        #print(target)
         loss_output = loss(output, target)
         optimizer.zero_grad()
-        loss_output[0].backward()
+        loss_output[0].backward()#loss_output.backward()#
         optimizer.step()
 
-        loss_output[0] = loss_output[0].data[0]
+        loss_output[0] = loss_output[0].data#[0]#loss_output = loss_output.data#
         metrics.append(loss_output)
 
     if epoch % args.save_freq == 0:            
@@ -257,7 +282,7 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
         np.mean(metrics[:, 3]),
         np.mean(metrics[:, 4]),
         np.mean(metrics[:, 5])))
-    print
+    
 
 def validate(data_loader, net, loss):
     start_time = time.time()
@@ -266,14 +291,14 @@ def validate(data_loader, net, loss):
 
     metrics = []
     for i, (data, target, coord) in enumerate(data_loader):
-        data = Variable(data.cuda(async = True), volatile = True)
-        target = Variable(target.cuda(async = True), volatile = True)
-        coord = Variable(coord.cuda(async = True), volatile = True)
+        data = Variable(data.cuda(non_blocking = True), volatile = True)
+        target = Variable(target.cuda(non_blocking = True), volatile = True)
+        coord = Variable(coord.cuda(non_blocking = True), volatile = True)
 
         output = net(data, coord)
         loss_output = loss(output, target, train = False)
 
-        loss_output[0] = loss_output[0].data[0]
+        loss_output[0] = loss_output[0].data#[0]
         metrics.append(loss_output)    
     end_time = time.time()
 
@@ -291,8 +316,7 @@ def validate(data_loader, net, loss):
         np.mean(metrics[:, 3]),
         np.mean(metrics[:, 4]),
         np.mean(metrics[:, 5])))
-    print
-    print
+    
 
 def test(data_loader, net, get_pbb, save_dir, config):
     start_time = time.time()
@@ -339,7 +363,7 @@ def test(data_loader, net, get_pbb, save_dir, config):
             feature = split_comber.combine(feature,sidelen)[...,0]
 
         thresh = args.testthresh # -8 #-3
-        print 'pbb thresh', thresh
+        print('pbb thresh', thresh)
         pbb,mask = get_pbb(output,thresh,ismask=True)
         if isfeat:
             feature_selected = feature[mask[0],mask[1],mask[2]]
@@ -355,14 +379,12 @@ def test(data_loader, net, get_pbb, save_dir, config):
 
 
     print('elapsed time is %3.2f seconds' % (end_time - start_time))
-    print
-    print
 
 def singletest(data,net,config,splitfun,combinefun,n_per_run,margin = 64,isfeat=False):
     z, h, w = data.size(2), data.size(3), data.size(4)
     print(data.size())
     data = splitfun(data,config['max_stride'],margin)
-    data = Variable(data.cuda(async = True), volatile = True,requires_grad=False)
+    data = Variable(data.cuda(non_blocking = True), volatile = True,requires_grad=False)
     splitlist = range(0,args.split+1,n_per_run)
     outputlist = []
     featurelist = []
@@ -385,3 +407,4 @@ def singletest(data,net,config,splitfun,combinefun,n_per_run,margin = 64,isfeat=
         return output
 if __name__ == '__main__':
     main()
+  
