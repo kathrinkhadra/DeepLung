@@ -253,9 +253,9 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
         loss_output[0].backward()#loss_output.backward()#
         optimizer.step()
         #print("loss_output[0]",loss_output[0])
-        #print("loss_output[0].data",loss_output[0].data)
+        #print("loss_output[0].data",loss_output[0].data.item())
 
-        loss_output[0] = loss_output[0].data#[0]#loss_output = loss_output.data#
+        loss_output[0] = loss_output[0].data.item()#[0]#loss_output = loss_output.data#
         metrics.append(loss_output)
 
     if epoch % args.save_freq == 0:            
@@ -275,8 +275,10 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
     #print(metrics)
     #metrics=[torch.stack(x).cpu().detach().numpy() for x in metrics]#np.asarray(, np.float32)
     #metrics =torch.stack(metrics).cpu().detach().numpy()#np.asarray(metrics, np.float32)
-    #for x in range()
-    metrics[:,6]=torch.stack(metrics[:,6]).cpu().detach().numpy()
+    print(metrics[6][:])
+    
+    metrics[6][:]=[torch.stack(x.item()).cpu().detach().numpy() for x in metrics[6][:]]
+    print(metrics[6][:])
     print(metrics)
     print('Epoch %03d (lr %.5f)' % (epoch, lr))
     print('Train:      tpr %3.2f, tnr %3.2f, total pos %d, total neg %d, time %3.2f' % (
