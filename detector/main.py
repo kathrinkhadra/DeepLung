@@ -31,7 +31,7 @@ parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=16, type=int,#100
+parser.add_argument('-b', '--batch-size', default=8, type=int,#16
                     metavar='N', help='mini-batch size (default: 16)')
 parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
                     metavar='LR', help='initial learning rate')
@@ -67,7 +67,9 @@ def main():
     torch.cuda.set_device(0)
 
     model = import_module(args.model)
+    print(args.model)
     config, net, loss, get_pbb = model.get_model()
+    print(loss)
     start_epoch = args.start_epoch
     save_dir = args.save_dir
     
@@ -246,9 +248,12 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
         #print(output)
         #print(target)
         loss_output = loss(output, target)
+        #print("loss_output",loss_output)
         optimizer.zero_grad()
         loss_output[0].backward()#loss_output.backward()#
         optimizer.step()
+        #print("loss_output[0]",loss_output[0])
+        print("loss_output[0].data",loss_output[0].data)
 
         loss_output[0] = loss_output[0].data#[0]#loss_output = loss_output.data#
         metrics.append(loss_output)
@@ -267,7 +272,12 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_freq, save_dir)
 
     end_time = time.time()
 
-    metrics = np.asarray(metrics, np.float32)
+    #print(metrics)
+    #metrics=[torch.stack(x).cpu().detach().numpy() for x in metrics]#np.asarray(, np.float32)
+    #metrics =torch.stack(metrics).cpu().detach().numpy()#np.asarray(metrics, np.float32)
+    #for x in range()
+    metrics[:,6]=torch.stack(metrics[:,6][0]).cpu().detach().numpy()
+    print(metrics)
     print('Epoch %03d (lr %.5f)' % (epoch, lr))
     print('Train:      tpr %3.2f, tnr %3.2f, total pos %d, total neg %d, time %3.2f' % (
         100.0 * np.sum(metrics[:, 6]) / np.sum(metrics[:, 7]),
